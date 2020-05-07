@@ -1,0 +1,107 @@
+---
+title: "Reproducible research"
+author: "Dan Taylor Lewis"
+date: "07/05/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T)
+```
+
+
+### Read in the data and set librarys.
+
+```{r,message=FALSE}
+library(dplyr)
+library(ggplot2)
+```
+
+```{r,message=F,results='hide',warning=F}
+dir.create("C:/Users/Dan/Documents/Coursera/Repoducible Research/")
+setwd("C:/Users/Dan/Documents/Coursera/Repoducible Research/")
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip","activities monitoring data.zip")
+list.files()
+unzip("activities monitoring data.zip")
+activity<-read.csv("activity.csv")
+```
+
+#### Quick look at data set date as a date.
+
+```{r,results='hide'}
+lapply(activity, function(x) summary(x))
+activity$date<-as.Date(activity$date)
+
+```
+
+### Histogram of total number of steps taken each day.
+
+```{r}
+activity%>%filter(!is.na(steps))%>%group_by(date)%>%summarise(total_steps=sum(steps))%>%
+    ggplot(aes(x=total_steps))+geom_histogram(binwidth = 1000)+labs(title="Histogram: Total steps taken each day",x="Total Steps",y="Count")
+```
+### Mean and median number of steps taken each day
+```{r}
+total_steps_by_day<-activity%>%group_by(date)%>%summarise(total_steps=sum(steps))
+mean(total_steps_by_day$total_steps,na.rm=T)
+median(total_steps_by_day$total_steps,na.rm=T)
+```
+
+### Time series plot of the average number of steps taken
+
+```{r}
+activity%>%filter(!is.na(steps))%>%group_by(date)%>%summarise(average_steps_per_interval=mean(steps))%>%
+    ggplot(aes(x=date,y=average_steps_per_interval,group=1))+geom_point()+geom_line(stat="identity",color="blue")+labs(title = "Time series: Average steps per interval by day",x="Date",y="Average step count")+theme(axis.text.x = element_text(angle = 90))
+
+```
+
+### The 5-minute interval that, on average, contains the maximum number of steps
+
+```{r}
+activity%>%filter(!is.na(steps))%>%group_by(interval)%>%summarise(average_steps=mean(steps))%>%arrange(desc(average_steps))%>%head(.,1)
+```
+
+### Code to describe and show a strategy for imputing missing data
+
+
+I will compute the average steps using the days and intervals without missing data and then impute the missing intervals to the corresponding average
+
+```{r}
+impute_to<-activity%>%filter(!is.na(steps))%>%group_by(interval)%>%summarise(avg_steps=mean(steps))
+for (i in 1:dim(activity)[1]){
+    if (is.na(activity[i,"steps"])){
+        activity[i,"steps"]<-impute_to[which(impute_to[,"interval"]==activity[i,"interval"]),"avg_steps"]
+    }
+
+}
+
+#Check 
+
+sum(is.na(activity$steps))
+
+```
+
+### Histogram of total number of steps taken each day after imputation.
+
+```{r}
+activity%>%group_by(date)%>%summarise(total_steps=sum(steps))%>%
+    ggplot(aes(x=total_steps))+geom_histogram(binwidth = 1000)+labs(title="Histogram: Total steps taken each day",x="Total Steps",y="Count")
+```
+
+### Panel plot comparing the average number of steps taken per 5-minute interval across weekdays and weekends
+
+```{r}
+
+activity$day<-as.factor(weekdays(activity$date))
+levels(activity$day)
+activity$weekend_flag<-as.factor(ifelse(as.numeric(activity$day) %in% c(3,4),1,0))
+levels(activity$weekend_flag)<-c("Weekday", "Weekend")
+
+
+activity%>%group_by(interval,weekend_flag)%>%summarise(avg_steps=mean(steps))%>%
+    ggplot(.,aes(x=interval,y=avg_steps,group=weekend_flag))+geom_point()+geom_line(color="blue")+ facet_wrap(~ weekend_flag)+labs(x="Interval",y="Average Step Count", title = "Average steps per 5 minute interval across weekdays and weekends")
+    
+ 
+```
+
+
